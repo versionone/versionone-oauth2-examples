@@ -45,27 +45,30 @@ namespace YamlClient
 			var timeboxFound = results[0].First();
 			var workitemsFound = results[1];
 
-			var iterationSums =
+			var iterationStart = (DateTime) timeboxFound.BeginDate;
+			var iterationEnd = (DateTime) timeboxFound.EndDate;
+
+			var iterationDaySums =
 				from workitem in workitemsFound
-				let changeDate = (DateTime) workitem.ChangeDate
+				let itemChanged = (DateTime) workitem.ChangeDate
 				where
-					changeDate > (DateTime) timeboxFound.BeginDate + TimeSpan.FromDays(1) &&
-					changeDate <= ((DateTime) timeboxFound.EndDate) + TimeSpan.FromDays(1)
-				group workitem by changeDate.Date
-				into workitemsByDay
-				let oneitem = workitemsByDay.First()
-				let timeboxes = (IEnumerable<dynamic>) oneitem.Timebox
-				let timebox = timeboxes.First()
-				let tasks = ((int?)timebox["Workitems:Task.ToDo.@Sum"]) ?? 0
-				let tests = ((int?)timebox["Workitems:Test.ToDo.@Sum"]) ?? 0
+					itemChanged > iterationStart + TimeSpan.FromDays(1) &&
+					itemChanged <= iterationEnd + TimeSpan.FromDays(1)
+				group workitem by itemChanged.Date
+				into oneDaysItems
+				let anItem = oneDaysItems.First()
+				let itemIterations = (IEnumerable<dynamic>) anItem.Timebox
+				let itemIteration = itemIterations.First()
+				let tasksum = (int?)itemIteration["Workitems:Task.ToDo.@Sum"]
+				let testsum = (int?)itemIteration["Workitems:Test.ToDo.@Sum"]
 				select new
 					{
-						Day = workitemsByDay.Key,
-						TaskSum = tasks + tests
+						Day = oneDaysItems.Key,
+						Sum = tasksum ?? 0 + testsum ?? 0
 					};
 
-			foreach (var daysum in iterationSums)
-				Console.WriteLine("{0}\t{1}", daysum.Day, daysum.TaskSum);
+			foreach (var day in iterationDaySums)
+				Console.WriteLine("{0}\t{1}", day.Day, day.Sum);
 
 			Console.ReadLine();
 		}
