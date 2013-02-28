@@ -41,6 +41,7 @@ namespace YamlClient
 			var client = new JsonClient(url, authTicket);
 
 			var results = client.GetResultSets(QueryBody).ToArray();
+
 			var timeboxFound = results[0].First();
 			var workitemsFound = results[1];
 
@@ -48,7 +49,7 @@ namespace YamlClient
 				from workitem in workitemsFound
 				let changeDate = (DateTime) workitem.ChangeDate
 				where
-					changeDate >= (DateTime) timeboxFound.BeginDate &&
+					changeDate > (DateTime) timeboxFound.BeginDate + TimeSpan.FromDays(1) &&
 					changeDate <= ((DateTime) timeboxFound.EndDate) + TimeSpan.FromDays(1)
 				group workitem by changeDate.Date
 				into workitemsByDay
@@ -64,11 +65,13 @@ namespace YamlClient
 					};
 
 			foreach (var daysum in iterationSums)
-				Console.WriteLine(String.Format("{0}\t{1}", daysum.Day, daysum.TaskSum));
+				Console.WriteLine("{0}\t{1}", daysum.Day, daysum.TaskSum);
+
 			Console.ReadLine();
 		}
 
 		public const string QueryBody = @"
+
 from: Timebox
 where:
   Name: Sprint 4
@@ -106,6 +109,7 @@ with:
   $scheduleName: Call Center Schedule
   $projectName: Call Center
   $iterationName: Sprint 4
+
 ";
 
 	}
