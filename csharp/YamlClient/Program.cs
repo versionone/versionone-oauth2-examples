@@ -36,7 +36,7 @@ namespace YamlClient
 		static void Main(string[] args)
 		{
 			var url = "http://localhost/VersionOne.Web/query.v1";
-			var authTicket = "HFZlcnNpb25PbmUuV2ViLkF1dGhlbnRpY2F0b3IUAAAABWFkbWluIKTDjq7hzwj/Pzf0dSjKKxC6xUr3zkFTpIb2zE6oHm2u";
+			var authTicket = "HFZlcnNpb25PbmUuV2ViLkF1dGhlbnRpY2F0b3IUAAAABWFkbWluEuEI8K/jzwj/Pzf0dSjKKxDMXxs1Vl60APaj8st8bMWB";
 
 			var client = new JsonClient(url, authTicket);
 
@@ -49,21 +49,22 @@ namespace YamlClient
 				let changeDate = (DateTime) workitem.ChangeDate
 				where
 					changeDate >= (DateTime) timeboxFound.BeginDate &&
-					changeDate <= (DateTime) timeboxFound.EndDate
+					changeDate <= ((DateTime) timeboxFound.EndDate) + TimeSpan.FromDays(1)
 				group workitem by changeDate.Date
 				into workitemsByDay
-				select new {
-					Day = workitemsByDay.Key,
-					TaskSum = workitemsByDay.Sum( workitem => {
-						var timeboxes = (IEnumerable<dynamic>) workitem.Timebox;
-						var timebox = timeboxes.First();
-						var tasks = (int?) timebox["Workitems:Task.ToDo.@Sum"];
-						var tests = (int?) timebox["Workitems:Test.ToDo.@Sum"];
-						return tasks + tests;
-					})
-				};
+				let oneitem = workitemsByDay.First()
+				let timeboxes = (IEnumerable<dynamic>) oneitem.Timebox
+				let timebox = timeboxes.First()
+				let tasks = ((int?)timebox["Workitems:Task.ToDo.@Sum"]) ?? 0
+				let tests = ((int?)timebox["Workitems:Test.ToDo.@Sum"]) ?? 0
+				select new
+					{
+						Day = workitemsByDay.Key,
+						TaskSum = tasks + tests
+					};
 
-			Console.WriteLine(JsonConvert.SerializeObject(iterationSums, Formatting.Indented));
+			foreach (var daysum in iterationSums)
+				Console.WriteLine(String.Format("{0}\t{1}", daysum.Day, daysum.TaskSum));
 			Console.ReadLine();
 		}
 
