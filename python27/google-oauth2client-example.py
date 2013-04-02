@@ -1,36 +1,111 @@
-import urllib2, base64, time
+import urllib2, base64, time, httplib2, sys
 
 from oauth2client.client import OAuth2WebServerFlow
+import oauth2client
+import oauth2client.clientsecrets
+
+import logging
+from logging import debug, info
+logging.basicConfig(level=logging.DEBUG)
+
+from pprint import pprint as pp
+
+v1_instance_url = "http://localhost/VersionOne.Web/"
+v1_api_endpoint = v1_instance_url + "rest-1.oauth.v1"
 
 
-q = """
-from: AssetType
-select:
-  - Name
-  - from: AttributeDefinitions
-    select:
-      - Name
-      - AttributeType
-"""
+from oauth2client.client import flow_from_clientsecrets
 
-qs = '---'.join([q] * 10)
+try:
+  flow = flow_from_clientsecrets(
+    'client_secrets.json',
+    scope='apiv1',
+    redirect_uri='urn:ietf:wg:oauth:2.0:oob'
+    )
+except ZeroDivisionError:
+  print "Please download the client-secrets.json file and save it in the current directory."
+  sys.exit(1)
 
-flow = OAuth2WebServerFlow(auth_uri="http://localhost/VersionOne.Web/OAuth2.mvc/Auth",
-                           token_uri="http://localhost/VersionOne.Web/oauth.mvc/token",
-                           client_id='f3a061f8-9096-4be9-82ce-66466e3ca5e1',
-                           client_secret='czBG2HLZoiBZjmVA',
-                           scope='yaml-query-api-0.5.0',
-                           redirect_uri='urn:ietf:wg:oauth:2.0:oob')
+# if using a proxy, you can configure the http client with proxy details here.
+# or use the HTTP_PROXY environment variables, which will be read by default.
 
-auth_uri = flow.step1_get_authorize_url(redirect_uri="urn:ietf:wg:oauth:2.0:oob")
-print "Go to " + auth_uri + " and paste the code found there:"
+httpclient = httplib2.Http()
+
+
+debug("creating oauth2 client instance, using pre-arranged client registration information")
+
+
+# # registration data is the result of manual client registration on the versionone server (which acts as an OAuth2 Authorization Server)
+# registration = dict(
+#   auth_uri="http://localhost/VersionOne.Web/OAuth2.mvc/Auth",
+#   token_uri="http://localhost/VersionOne.Web/oauth.mvc/token",
+#   client_id='f3a061f8-9096-4be9-82ce-66466e3ca5e1',
+#   client_secret='czBG2HLZoiBZjmVA',
+#   scope='yaml-query-api-0.5.0',
+#   redirect_uri='urn:ietf:wg:oauth:2.0:oob',
+#   )
+
+# flow = OAuth2WebServerFlow(**registration)
+# this_instance_endpoint_url = "urn:ietf:wg:oauth:2.0:oob"
+
+
+info("About to execute step 1: get authorization url to send user to, which contains metadata from the client registration")
+#pp(registration)
+
+auth_uri = flow.step1_get_authorize_url()
+
+info("About to execute step 1: get authorization url to send user to, which contains metadata from the client registration")
+
+print
+print "********************************************************"
+print
+print "Please visit " + auth_uri
+print "You must accept the requested permissions, copy the code returned, and paste the code here:"
+print
+
 code = raw_input().strip()
-credentials = flow.step2_exchange(code)
 
-request = urllib2.Request("http://localhost/VersionOne.Web/query.v1", data=qs)
-credentials.apply(request.headers)
+print
+print "Paste received. "
+print
 
-t0 = time.time(); result = urllib2.urlopen(request).read(); t1=time.time(); print t1-t0
+info("Now exchanging authorization code for an authorization and refresh token")
 
+credentials = flow.step2_exchange(code, httpclient)
 
+info("Received authorization and refresh token credentials from the authorization server:")
+pp(credentials)
+
+credentials.authorize(httpclient)
+
+info("Added authorization to http client object")
+
+def doRequestWithoutClient(url, credentials):
+  request = urllib2.Request(url)
+  info("Request headers modified to use access credentials:")
+  credentials.apply(request)
+  pp(request.headers)
+  info("Making data request to protected resource:")
+  body = urllib2.urlopen(request).read()
+  info(body)
+  return body
+
+def doRequest(url, authorized_client):
+  #request = urllib2.Request(url)
+  #info("Request headers modified to use access credentials:")
+  #credentials.apply(request)
+  #pp(request.headers)
+  info("Making data request to protected resource:")
+  response = authorized_client.request(url)
+  #body = urllib2.urlopen(request).read()
+  return response
+
+api_query_url = v1_api_endpoint + "/Data/Scope/0"
+
+info("doing request to " + api_query_url)
+
+headers, body = doRequest(api_query_url, httpclient)
+info("Response headers: " + str(headers))
+
+info("Response body: " + body)
 
