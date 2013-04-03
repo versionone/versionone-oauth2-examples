@@ -1,4 +1,4 @@
-import urllib2, base64, time, httplib2, sys, os, logging
+import urllib2, base64, time, httplib2, sys, os, logging, json
 from logging import debug, info
 from pprint import pprint as pp
 
@@ -12,21 +12,29 @@ from oauth2client.client import flow_from_clientsecrets
 
 logging.basicConfig(level=logging.DEBUG)
 
-v1_instance_url = "http://localhost/VersionOne.Web/"
-v1_api_endpoint = v1_instance_url + "rest-1.oauth.v1"
 
+
+secrets_file = 'client_secrets.json'
 
 try:
   flow = flow_from_clientsecrets(
-      'client_secrets.json',
+      secrets_file,
       scope='apiv1 test:grant_15s',
       redirect_uri='urn:ietf:wg:oauth:2.0:oob'
       )
+
+  raw_secrets_data = json.load(open(secrets_file,"r"))
+  secrets_data = raw_secrets_data.get("installed", raw_secrets_data.get("web", None))
 except oauth2client.clientsecrets.InvalidClientSecretsError:
   print "Please download the client_secrets.json file from the VersionOne permitted applications page"
   print "and save it in the current directory (%s)" %(os.getcwd(),)
   print
   sys.exit(1)
+
+
+v1_api_endpoint = secrets_data.get(u"server_base_uri", "http://localhost/VersionOne.Web") + "/rest-1.oauth.v1"
+
+print "Using data URL " + v1_api_endpoint
 
 # if using a proxy, you can configure the http client with proxy details here.
 # or use the HTTP_PROXY environment variables, which will be read by default.
@@ -75,12 +83,11 @@ api_query_url = v1_api_endpoint + "/Data/Scope/0"
 info("doing request to " + api_query_url)
 try:
   headers, body = doRequest(api_query_url, httpclient)
+  info("Response headers: " + str(headers))
+  info("Response body: " + body)
 except oauth2client.client.AccessTokenRefreshError as error:
   storage.delete()
   info("Problem with stored credentials.  Please run this program again and follow the steps to re-establish credentials.")
   sys.exit(2)
 
-info("Response headers: " + str(headers))
-
-info("Response body: " + body)
 
