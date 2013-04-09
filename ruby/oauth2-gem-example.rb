@@ -31,6 +31,7 @@ authorization_grant_url = client.auth_code.authorize_url(
   )
 
 puts "Please visit \n\n#{authorization_grant_url}\n\n and paste the authorization code from that page: "
+puts "NOTE: This will probably not work at the Windows console, because ruby can only read 254 characters in one gets()"
 auth_code = $stdin.read().strip
 puts "Paste received: >>#{auth_code}<<"
 
