@@ -4,15 +4,21 @@ from pprint import pprint as pp
 
 import oauth2client
 import oauth2client.clientsecrets
+import oauth2client.tools
 from oauth2client.file import Storage
-from oauth2client.client import OAuth2WebServerFlow
-from oauth2client.client import flow_from_clientsecrets
-
-
+from oauth2client.client import flow_from_clientsecrets 
 
 logging.basicConfig(level=logging.DEBUG)
 
+import gflags
+import sys
 
+FLAGS = gflags.FLAGS
+try:
+  argv = FLAGS(sys.argv)  # parse flags
+except gflags.FlagsError, e:
+  print '%s\\nUsage: %s ARGS\\n%s' % (e, sys.argv[0], FLAGS)
+  sys.exit(1)
 
 secrets_file = 'client_secrets.json'
 
@@ -31,7 +37,6 @@ except oauth2client.clientsecrets.InvalidClientSecretsError:
   print
   sys.exit(1)
 
-
 v1_api_endpoint = secrets_data.get(u"server_base_uri", "http://localhost/VersionOne.Web") + "/rest-1.oauth.v1"
 
 print "Using data URL " + v1_api_endpoint
@@ -40,34 +45,12 @@ print "Using data URL " + v1_api_endpoint
 # or use the HTTP_PROXY environment variables, which will be read by default.
 httpclient = httplib2.Http()
 
-def get_creds():
-  info("creating oauth2 client instance, using pre-arranged client registration information")
-  info("About to execute step 1: get authorization url to send user to, which contains metadata from the client registration")
-  auth_uri = flow.step1_get_authorize_url()
-  print
-  print "********************************************************"
-  print
-  print "Please visit " + auth_uri
-  print "You must accept the requested permissions, copy the code returned, and paste the code here:"
-  print
-  code = raw_input().strip()
-  print
-  print "Paste received. "
-  print
-  info("Now exchanging authorization code for an authorization and refresh token")
-  credentials = flow.step2_exchange(code, httpclient)
-  info("Received authorization and refresh token credentials from the authorization server:")
-  return credentials
-
-
 info("Trying to get creds from file")
 storage = Storage('stored_credentials.json')
-credentials = storage.get()
 
+credentials = storage.get()
 if not credentials:
-  info("Failed to get creds from file.")
-  credentials = get_creds()
-  storage.put(credentials)
+  credentials = oauth2client.tools.run(flow, storage, httpclient)  
 
 credentials.authorize(httpclient)
 
