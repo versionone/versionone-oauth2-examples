@@ -26,9 +26,9 @@ except gflags.FlagsError, e:
 
 
 secrets_file = 'client_secrets.json'
-scopes_requested = 'apiv1 test:grant_15s'
+scopes_requested = 'query-api-1.0 test:grant_15s'
 default_server_url = "http://localhost/VersionOne.Web"
-api_endpoint_path = "/rest-1.oauth.v1"
+api_endpoint_path = "/query.v1"
 
 try:
   flow = flow_from_clientsecrets(
@@ -67,12 +67,20 @@ credentials.authorize(httpclient)
 info("Added authorization to http client object")
 
 
-api_query_url = v1_api_endpoint + "/Data/Scope/0"
-
-info("Trying request to " + api_query_url)
+querybody = """
+from: AssetType
+select:
+  - Name
+  - from: AttributeDefinitions
+    select:
+      - Name
+      - IsRequired
+      - AttributeType
+"""
+info("Trying request to " + v1_api_endpoint)
 
 try:
-  headers, body = httpclient.request(api_query_url)
+  headers, body = httpclient.request(v1_api_endpoint, body=querybody, method="POST")
   info("Response headers: " + str(headers))
   info("Response body: " + body)
 except oauth2client.client.AccessTokenRefreshError as error:
