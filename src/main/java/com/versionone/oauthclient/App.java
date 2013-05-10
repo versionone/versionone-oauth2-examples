@@ -23,6 +23,7 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 
 public class App {
+	
 	// Currently VersionOne only has a single OAuth security scope.
 	private static final String SCOPE = "apiv1";
 	//private static final String SCOPE = "test:grant_15s";
@@ -31,31 +32,56 @@ public class App {
 	private static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
 
 	// Global instance of the JSON factory.
-	static final JsonFactory JSON_FACTORY = new JacksonFactory();
+	private static final JsonFactory JSON_FACTORY = new JacksonFactory();
 
-	private static final String TOKEN_SERVER_URL = "https://www14.v1host.com/v1sdktesting/oauth.mvc/token";
-	private static final String AUTHORIZATION_SERVER_URL = "https://www14.v1host.com/v1sdktesting/oauth.mvc/auth";
-	private static final String REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob";
-	private static final String CLIENT_ID = "client_mzqhn239";
-	private static final String CLIENT_SECRET = "dnkegtru5eahhfgvwzqq";
+	// Client secrets from the VersionOne application instance
+	private static final IClientSecrets secrets = new HardCodedClientSecrets();
+
+	// User ID is a key for getting storing and retrieving credentials
+	private static final String USER_ID = "self";
 
 	public static void main(String[] args) {
 		
+        System.out.println("\n[STEP] Initialize Authorization Flow");
+		AuthorizationCodeFlow codeFlow = new AuthorizationCodeFlow.Builder(
+				// VersionOne accepts OAuth tokens in the header.
+				BearerToken.authorizationHeaderAccessMethod(), 
+				// Communication will be over HTTP.
+				HTTP_TRANSPORT,
+				// OAuth end-points require JSON parsing.
+				JSON_FACTORY, 
+				// The token URI is found in the VersionOne client_secrets
+				new GenericUrl(secrets.getTokenUri()), 
+				// The client authentication parameters are found in the VersionOne client_secrets
+				new ClientParametersAuthentication(secrets.getClientId(), secrets.getClientSecret()),
+				// The client id is found in the VersionOne client_secrets
+				secrets.getClientId(),
+				// The authorization URI is found in the VersionOne client_secrets
+				secrets.getAuthUri())
+		// Set up storage for credentials once they are granted.
+		.setCredentialStore(new MemoryCredentialStore())
+		// There is currently only 1 valid scope for VersionOne.
+		.setScopes(SCOPE)
+		.build();
+
+        System.out.println("\n[STEP] Check to see if credentials can be loaded.");
 		Credential credential = null;
+		try {
+			credential = codeFlow.loadCredential(USER_ID);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		if (null!=credential) {
+			System.out.println("Using stored credentials.");
+	        System.out.printf("Access Token: %s\n" + credential.getAccessToken());
+	        System.out.printf("Expires In: %s\n" + credential.getExpiresInSeconds());
+		} else {
+			System.out.println("No stored credentials were found.");
+		}
 
         System.out.println("\n[STEP] Request Authorization");
 
-		AuthorizationCodeFlow codeFlow = new AuthorizationCodeFlow.Builder(
-				BearerToken.authorizationHeaderAccessMethod(), 
-				HTTP_TRANSPORT,
-				JSON_FACTORY, 
-				new GenericUrl(TOKEN_SERVER_URL), 
-				new ClientParametersAuthentication(CLIENT_ID, CLIENT_SECRET),
-				CLIENT_ID, 
-				AUTHORIZATION_SERVER_URL)
-		.setCredentialStore(new MemoryCredentialStore())
-		.setScopes(SCOPE)
-		.build();
 		
 		/*
 		// If credentials can be loaded, we're done.
@@ -68,7 +94,7 @@ public class App {
 		*/
 
 		AuthorizationCodeRequestUrl codeUrl = codeFlow.newAuthorizationUrl()
-				.setRedirectUri(REDIRECT_URI)
+				.setRedirectUri(secrets.getRedirectUris().get(0))
 				.setResponseTypes("code");
 		String url = codeUrl.build();
 
@@ -98,7 +124,7 @@ public class App {
         TokenResponse tokenResponse = null;
 		try {
 			tokeRequest = codeFlow.newTokenRequest(code)
-					.setRedirectUri(REDIRECT_URI)
+					.setRedirectUri(secrets.getRedirectUris().get(0))
 					.setScopes(SCOPE);
 			tokenResponse = tokeRequest.execute();
 		} catch (IOException e) {
@@ -108,7 +134,7 @@ public class App {
 		}
 
 		try {
-			credential = codeFlow.createAndStoreCredential(tokenResponse, "self");
+			credential = codeFlow.createAndStoreCredential(tokenResponse, USER_ID);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -124,7 +150,7 @@ public class App {
 		HttpRequestFactory requestFactory = null;
 		
 		try {
-			final Credential v1credential = codeFlow.loadCredential("self");
+			final Credential v1credential = codeFlow.loadCredential(USER_ID);
 	        requestFactory =
 	                HTTP_TRANSPORT.createRequestFactory(new HttpRequestInitializer() {
 	                  public void initialize(HttpRequest request) throws IOException {
@@ -160,7 +186,12 @@ public class App {
 		}
         
         try {
-			System.out.printf("Response: \n%s", v1response.getContent().toString());
+        	BufferedReader in = new BufferedReader(new InputStreamReader(v1response.getContent()));
+        	String inputLine;
+			System.out.println("Response: ");
+			while ((inputLine = in.readLine()) != null)
+			    System.out.println(inputLine);
+			in.close();			
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
