@@ -3,6 +3,7 @@ package com.versionone.oauthclient;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Map;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.AuthorizationCodeRequestUrl;
@@ -13,6 +14,7 @@ import com.google.api.client.auth.oauth2.MemoryCredentialStore;
 import com.google.api.client.auth.oauth2.TokenRequest;
 import com.google.api.client.auth.oauth2.TokenResponse;
 import com.google.api.client.http.GenericUrl;
+import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpRequestFactory;
 import com.google.api.client.http.HttpRequestInitializer;
@@ -25,8 +27,8 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 public class App {
 	
 	// Currently VersionOne only has a single OAuth security scope.
-	private static final String SCOPE = "apiv1";
-	//private static final String SCOPE = "test:grant_15s";
+	//private static final String SCOPE = "apiv1";
+	private static final String SCOPE = "test:grant_15s apiv1";
 
 	// Global instance of the HTTP transport.
 	private static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
@@ -74,130 +76,96 @@ public class App {
 		}
 		if (null!=credential) {
 			System.out.println("Using stored credentials.");
-	        System.out.printf("Access Token: %s\n" + credential.getAccessToken());
-	        System.out.printf("Expires In: %s\n" + credential.getExpiresInSeconds());
+	        System.out.printf("Access Token: %s%n" + credential.getAccessToken());
+	        System.out.printf("Expires In: %s%n" + credential.getExpiresInSeconds());
 		} else {
 			System.out.println("No stored credentials were found.");
 		}
 
-        System.out.println("\n[STEP] Request Authorization");
-
-		
-		/*
-		// If credentials can be loaded, we're done.
 		try {
-			credential = codeFlow.loadCredential("self");
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		*/
-
-		AuthorizationCodeRequestUrl codeUrl = codeFlow.newAuthorizationUrl()
-				.setRedirectUri(secrets.getRedirectUris().get(0))
-				.setResponseTypes("code");
-		String url = codeUrl.build();
-
-		System.out.println("\nNavigate to:");
-        System.out.println(url);
-        try {
-			java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
-		} catch (IOException e2) {
-			// TODO Auto-generated catch block
-			e2.printStackTrace();
-		}
-
-        System.out.println("\n[STEP] Get Authorization Code");
-        System.out.println("Paste authorization code:");
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        String code = null;
-        try {
-			code = br.readLine();
-		} catch (IOException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-			return;
-		}
-
-        System.out.println("\n[STEP] Request Access Token");
-        TokenRequest tokeRequest = null;
-        TokenResponse tokenResponse = null;
-		try {
-			tokeRequest = codeFlow.newTokenRequest(code)
-					.setRedirectUri(secrets.getRedirectUris().get(0))
-					.setScopes(SCOPE);
-			tokenResponse = tokeRequest.execute();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return;
-		}
-
-		try {
-			credential = codeFlow.createAndStoreCredential(tokenResponse, USER_ID);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return;
-		}
-		
-        System.out.println("Access Token: " + tokenResponse.getAccessToken());
-        System.out.println("Expires In: " + tokenResponse.getExpiresInSeconds());
-
-        System.out.println("\n[STEP] Request Data");
-        
-		
-		HttpRequestFactory requestFactory = null;
-		
-		try {
-			final Credential v1credential = codeFlow.loadCredential(USER_ID);
-	        requestFactory =
+	        requestAuthorization(codeFlow);
+	        String code = receiveAuthorizationCode();
+			final Credential v1credential = requestAccessToken(codeFlow, code);
+			long expirationTime = v1credential.getExpiresInSeconds() * 1000;
+	        HttpRequestFactory requestFactory =
 	                HTTP_TRANSPORT.createRequestFactory(new HttpRequestInitializer() {
 	                  public void initialize(HttpRequest request) throws IOException {
 	                	  v1credential.initialize(request);
 	                  }
 	                });
+			requestResource(requestFactory);
+			waitForTokenExpiration(expirationTime);
+			requestResource(requestFactory);
+		} catch (IOException ioe) {
+			// TODO Auto-generated catch block
+			ioe.printStackTrace();
+		} catch (InterruptedException ie) {
+			// TODO Auto-generated catch block
+			ie.printStackTrace();
+		}
+	}
 
-		} catch (IOException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-			return;
-		}
+	private static void waitForTokenExpiration(long millis) throws InterruptedException {
+		final long buffer = 5000; // 5 sec
+		System.out.println("\n[STEP] Wait for Token Expiration");
+		System.out.printf("Sleeping for %d seconds until token expires.%n", ((millis + buffer) / 1000));
+		Thread.sleep(millis + buffer);
+	}
 
-        GenericUrl v1url = new GenericUrl("https://www14.v1host.com/v1sdktesting/rest-1.oauth.v1/data/Scope/0");
+	private static void requestAuthorization(AuthorizationCodeFlow codeFlow) {
+		System.out.println("\n[STEP] Request Authorization");
+		AuthorizationCodeRequestUrl codeUrl = codeFlow.newAuthorizationUrl()
+				.setRedirectUri(secrets.getRedirectUris().get(0))
+				.setResponseTypes("code");
+		String url = codeUrl.build();
+		System.out.println("  Navigate to:");
+        System.out.println(url);
+        try {
+			java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
+		} catch (IOException ioe) {
+			// If browser doesn't open, the instructions still prompt user to follow the link.
+		}
+	}
 
-        HttpRequest v1request = null;
-        try {
-			v1request = requestFactory.buildGetRequest(v1url);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return;
-		}
+	private static String receiveAuthorizationCode() throws IOException {
+		System.out.println("\n[STEP] Receive Authorization Code");
+        System.out.println("  Paste authorization code:");
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String code = null;
+		code = br.readLine();
+		return code;
+	}
+
+	private static Credential requestAccessToken(AuthorizationCodeFlow codeFlow, String code) throws IOException {
+		System.out.println("\n[STEP] Request Access Token");
+        TokenRequest tokeRequest = codeFlow.newTokenRequest(code)
+        		.setRedirectUri(secrets.getRedirectUris().get(0))
+        		.setScopes(SCOPE);
+		TokenResponse tokenResponse = tokeRequest.execute();
+		System.out.println("  Received new access token.");
+        System.out.printf("  Access Token: %s%n", tokenResponse.getAccessToken());
+        System.out.printf("  Expires In: %d s%n", tokenResponse.getExpiresInSeconds());
+		return codeFlow.createAndStoreCredential(tokenResponse, USER_ID);
+	}
+
+	private static void requestResource(HttpRequestFactory requestFactory) throws IOException {
+        System.out.println("\n[STEP] Request Resource");
+
+		System.out.println("  [Request]");
+		GenericUrl v1url = new GenericUrl("https://www14.v1host.com/v1sdktesting/rest-1.oauth.v1/data/Scope/0");
+        HttpRequest v1request = requestFactory.buildGetRequest(v1url);
+        System.out.printf("    %s %s\n", v1request.getRequestMethod(), v1request.getUrl().toString());
+        System.out.printf("    Headers: %s\n", v1request.getHeaders().toString());
         
-        HttpResponse v1response = null;
-        try {
-        	System.out.printf("Headers: %s\n", v1request.getHeaders().toString());
-			v1response = v1request.execute();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return;
-		}
-        
-        try {
-        	BufferedReader in = new BufferedReader(new InputStreamReader(v1response.getContent()));
-        	String inputLine;
-			System.out.println("Response: ");
-			while ((inputLine = in.readLine()) != null)
-			    System.out.println(inputLine);
-			in.close();			
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return;
-		}
-        
+		System.out.println("  [Response]");
+        HttpResponse v1response = v1request.execute();
+    	BufferedReader in = new BufferedReader(new InputStreamReader(v1response.getContent()));
+    	String inputLine;
+        System.out.printf("    Headers: %s\n", v1response.getHeaders().toString());
+        System.out.println("    Body:");
+		while ((inputLine = in.readLine()) != null)
+		    System.out.println(inputLine);
+		in.close();			
 	}
 
 }
