@@ -3,7 +3,6 @@ package com.versionone.oauthclient;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Map;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.AuthorizationCodeRequestUrl;
@@ -14,7 +13,6 @@ import com.google.api.client.auth.oauth2.MemoryCredentialStore;
 import com.google.api.client.auth.oauth2.TokenRequest;
 import com.google.api.client.auth.oauth2.TokenResponse;
 import com.google.api.client.http.GenericUrl;
-import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpRequestFactory;
 import com.google.api.client.http.HttpRequestInitializer;
@@ -23,6 +21,7 @@ import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
+import com.versionone.oauthclient.jsonfilesecrets.JsonFileRepository;
 
 public class App {
 	
@@ -37,13 +36,26 @@ public class App {
 	private static final JsonFactory JSON_FACTORY = new JacksonFactory();
 
 	// Client secrets from the VersionOne application instance
-	private static final IClientSecrets secrets = new HardCodedClientSecrets();
+	private static IClientSecrets secrets;
 
 	// User ID is a key for getting storing and retrieving credentials
 	private static final String USER_ID = "self";
 
 	public static void main(String[] args) {
 		
+        System.out.println("\n[STEP] Load Client Secrets");
+		secrets = new JsonFileRepository(JSON_FACTORY).loadClientSecrets();
+		// Quit if the secrets could not be loaded.
+		if (null == secrets) System.exit(1);
+        System.out.printf("  Client ID: %s%n", secrets.getClientId());
+        System.out.printf("  Client Name: %s%n", secrets.getClientName());
+        System.out.printf("  Client Secret: %s%n", secrets.getClientSecret());
+        System.out.printf("  Redirect URIs: %s%n", secrets.getRedirectUris().toString());
+        System.out.printf("  Auth URI: %s%n", secrets.getAuthUri());
+        System.out.printf("  Token URI: %s%n", secrets.getTokenUri());
+        System.out.printf("  Server Base URI: %s%n", secrets.getServerBaseUri());
+        System.out.printf("  Expires On: %s%n", secrets.getExpiresOn());
+        
         System.out.println("\n[STEP] Initialize Authorization Flow");
 		AuthorizationCodeFlow codeFlow = new AuthorizationCodeFlow.Builder(
 				// VersionOne accepts OAuth tokens in the header.
@@ -124,6 +136,7 @@ public class App {
 		} catch (IOException ioe) {
 			// If browser doesn't open, the instructions still prompt user to follow the link.
 		}
+        return;
 	}
 
 	private static String receiveAuthorizationCode() throws IOException {
