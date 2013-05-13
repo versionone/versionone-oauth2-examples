@@ -152,7 +152,12 @@ public class App {
         System.out.println("\n[STEP] Request Resource");
 
 		System.out.println("  [Request]");
-		GenericUrl v1url = new GenericUrl("https://www14.v1host.com/v1sdktesting/rest-1.oauth.v1/data/Scope/0");
+		// Get the VersionOne instance from client_secrets
+		GenericUrl v1url = new GenericUrl(secrets.getServerBaseUri());
+		// Add the OAuth API end-point
+		v1url.getPathParts().add("rest-1.oauth.v1");
+		// Add a simple query that should work for most instances
+		v1url.appendRawPath("/data/Scope/0");
         HttpRequest v1request = requestFactory.buildGetRequest(v1url);
         System.out.printf("    %s %s\n", v1request.getRequestMethod(), v1request.getUrl().toString());
         System.out.printf("    Headers: %s\n", v1request.getHeaders().toString());
