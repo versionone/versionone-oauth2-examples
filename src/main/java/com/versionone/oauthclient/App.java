@@ -88,8 +88,17 @@ public class App {
 	                  }
 	                });
 			requestResource(requestFactory);
-			waitForTokenExpiration(expirationTime);
-			requestResource(requestFactory);
+			
+			//waitForTokenExpiration(expirationTime);
+			waitForTokenExpiration(v1credential.getExpiresInSeconds() * 1000);
+			final Credential v1credential_2 = obtainCredentials(codeFlow);
+	        HttpRequestFactory requestFactory_2 =
+	                HTTP_TRANSPORT.createRequestFactory(new HttpRequestInitializer() {
+	                  public void initialize(HttpRequest request) throws IOException {
+	                	  v1credential_2.initialize(request);
+	                  }
+	                });
+			requestResource(requestFactory_2);
 		} catch (IOException ioe) {
 			// TODO Auto-generated catch block
 			ioe.printStackTrace();
@@ -104,11 +113,11 @@ public class App {
 		Credential credential = null;
 		credential = codeFlow.loadCredential(USER_ID);
 		if (null!=credential) {
-			System.out.println("Using stored credentials.");
-	        System.out.printf("Access Token: %s%n" + credential.getAccessToken());
-	        System.out.printf("Expires In: %s%n" + credential.getExpiresInSeconds());
+			System.out.println("  Using stored credentials.");
+	        System.out.printf("  Access Token: %s%n", credential.getAccessToken());
+	        System.out.printf("  Expires In: %s s%n", credential.getExpiresInSeconds());
 		} else {
-			System.out.println("No stored credentials were found.");
+			System.out.println("  No stored credentials were found.");
 	        requestAuthorization(codeFlow);
 	        String code = receiveAuthorizationCode();
 			credential = requestAccessToken(codeFlow, code);
@@ -117,9 +126,9 @@ public class App {
 	}
 
 	private static void waitForTokenExpiration(long millis) throws InterruptedException {
-		final long buffer = 5000; // 5 sec
+		final long buffer = 5 * 1000; // 5 sec
 		System.out.println("\n[STEP] Wait for Token Expiration");
-		System.out.printf("Sleeping for %d seconds until token expires.%n", ((millis + buffer) / 1000));
+		System.out.printf("  Sleeping for %d seconds until token expires.%n", ((millis + buffer) / 1000));
 		Thread.sleep(millis + buffer);
 	}
 
@@ -168,7 +177,7 @@ public class App {
 		GenericUrl v1url = new GenericUrl(secrets.getServerBaseUri());
 		// Add the OAuth API end-point
 		v1url.getPathParts().add("rest-1.oauth.v1");
-		// Add a simple query that should work for most instances
+		// Add a simple data query that should work for most instances
 		v1url.appendRawPath("/data/Scope/0");
         HttpRequest v1request = requestFactory.buildGetRequest(v1url);
         System.out.printf("    %s %s\n", v1request.getRequestMethod(), v1request.getUrl().toString());
