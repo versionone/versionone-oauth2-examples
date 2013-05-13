@@ -9,6 +9,7 @@ import com.versionone.oauthclient.IClientSecretRepository;
 import com.versionone.oauthclient.IClientSecrets;
 
 public class JsonFileRepository implements IClientSecretRepository{
+	private static final String CLIENT_SECRETS_FILENAME = "client_secrets.json";
 	private JsonFactory jsonFactory;
 	
 	public JsonFileRepository(JsonFactory jsonFactory) {
@@ -18,9 +19,9 @@ public class JsonFileRepository implements IClientSecretRepository{
 	public IClientSecrets loadClientSecrets() {
 		FileInputStream clientSecrets;
 		try {
-			clientSecrets = new FileInputStream("client_secrets.json");
+			clientSecrets = new FileInputStream(CLIENT_SECRETS_FILENAME);
 		} catch (FileNotFoundException e) {
-			System.out.printf("Please download the client_secrets.json file from the VersionOne permitted %napplications page and save it in the current directory.%n");
+			System.out.printf("Please download the %s file from the VersionOne permitted applications page and save it in the current directory.%n", CLIENT_SECRETS_FILENAME);
 			return null;
 		}
 		InstalledApplication app = null;

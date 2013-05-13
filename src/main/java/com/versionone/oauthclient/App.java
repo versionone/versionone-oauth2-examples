@@ -1,6 +1,7 @@
 package com.versionone.oauthclient;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
@@ -9,9 +10,9 @@ import com.google.api.client.auth.oauth2.AuthorizationCodeRequestUrl;
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.ClientParametersAuthentication;
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.auth.oauth2.MemoryCredentialStore;
 import com.google.api.client.auth.oauth2.TokenRequest;
 import com.google.api.client.auth.oauth2.TokenResponse;
+import com.google.api.client.extensions.java6.auth.oauth2.FileCredentialStore;
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpRequestFactory;
@@ -26,8 +27,7 @@ import com.versionone.oauthclient.jsonfilesecrets.JsonFileRepository;
 public class App {
 	
 	// Currently VersionOne only has a single OAuth security scope.
-	//private static final String SCOPE = "apiv1";
-	private static final String SCOPE = "test:grant_15s apiv1";
+	private static final String SCOPE = "apiv1";
 
 	// Global instance of the HTTP transport.
 	private static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
@@ -56,31 +56,12 @@ public class App {
         System.out.printf("  Server Base URI: %s%n", secrets.getServerBaseUri());
         System.out.printf("  Expires On: %s%n", secrets.getExpiresOn());
         
-        System.out.println("\n[STEP] Initialize Authorization Flow");
-		AuthorizationCodeFlow codeFlow = new AuthorizationCodeFlow.Builder(
-				// VersionOne accepts OAuth tokens in the header.
-				BearerToken.authorizationHeaderAccessMethod(), 
-				// Communication will be over HTTP.
-				HTTP_TRANSPORT,
-				// OAuth end-points require JSON parsing.
-				JSON_FACTORY, 
-				// The token URI is found in the VersionOne client_secrets
-				new GenericUrl(secrets.getTokenUri()), 
-				// The client authentication parameters are found in the VersionOne client_secrets
-				new ClientParametersAuthentication(secrets.getClientId(), secrets.getClientSecret()),
-				// The client id is found in the VersionOne client_secrets
-				secrets.getClientId(),
-				// The authorization URI is found in the VersionOne client_secrets
-				secrets.getAuthUri())
-		// Set up storage for credentials once they are granted.
-		.setCredentialStore(new MemoryCredentialStore())
-		// There is currently only 1 valid scope for VersionOne.
-		.setScopes(SCOPE)
-		.build();
 
 		try {
+			AuthorizationCodeFlow codeFlow = initializeAuthorizationFlow();
 			final Credential v1credential = obtainCredentials(codeFlow);
-			long expirationTime = v1credential.getExpiresInSeconds() * 1000;
+	        System.out.printf("  Access Token: %s%n", v1credential.getAccessToken());
+	        System.out.printf("  Expires In: %d s%n", v1credential.getExpiresInSeconds());
 	        HttpRequestFactory requestFactory =
 	                HTTP_TRANSPORT.createRequestFactory(new HttpRequestInitializer() {
 	                  public void initialize(HttpRequest request) throws IOException {
@@ -88,48 +69,51 @@ public class App {
 	                  }
 	                });
 			requestResource(requestFactory);
-			
-			//waitForTokenExpiration(expirationTime);
-			waitForTokenExpiration(v1credential.getExpiresInSeconds() * 1000);
-			final Credential v1credential_2 = obtainCredentials(codeFlow);
-	        HttpRequestFactory requestFactory_2 =
-	                HTTP_TRANSPORT.createRequestFactory(new HttpRequestInitializer() {
-	                  public void initialize(HttpRequest request) throws IOException {
-	                	  v1credential_2.initialize(request);
-	                  }
-	                });
-			requestResource(requestFactory_2);
 		} catch (IOException ioe) {
 			// TODO Auto-generated catch block
 			ioe.printStackTrace();
-		} catch (InterruptedException ie) {
-			// TODO Auto-generated catch block
-			ie.printStackTrace();
 		}
+	}
+
+	private static AuthorizationCodeFlow initializeAuthorizationFlow() throws IOException {
+		System.out.println("\n[STEP] Initialize Authorization Flow");
+		File credentialFile = new File("stored_credentials.json");
+		AuthorizationCodeFlow codeFlow = new AuthorizationCodeFlow.Builder(
+					// VersionOne accepts OAuth tokens in the header.
+					BearerToken.authorizationHeaderAccessMethod(), 
+					// Communication will be over HTTP.
+					HTTP_TRANSPORT,
+					// OAuth end-points require JSON parsing.
+					JSON_FACTORY, 
+					// The token URI is found in the VersionOne client_secrets
+					new GenericUrl(secrets.getTokenUri()), 
+					// The client authentication parameters are found in the VersionOne client_secrets
+					new ClientParametersAuthentication(secrets.getClientId(), secrets.getClientSecret()),
+					// The client id is found in the VersionOne client_secrets
+					secrets.getClientId(),
+					// The authorization URI is found in the VersionOne client_secrets
+					secrets.getAuthUri())
+			// Set up storage for credentials once they are granted.
+			.setCredentialStore(new FileCredentialStore(credentialFile, JSON_FACTORY))
+			// There is currently only 1 valid scope for VersionOne.
+			.setScopes(SCOPE)
+			.build();
+		return codeFlow;
 	}
 
 	private static Credential obtainCredentials(AuthorizationCodeFlow codeFlow) throws IOException {
 		System.out.println("\n[STEP] Obtain Credentials.");
 		Credential credential = null;
 		credential = codeFlow.loadCredential(USER_ID);
-		if (null!=credential) {
-			System.out.println("  Using stored credentials.");
-	        System.out.printf("  Access Token: %s%n", credential.getAccessToken());
-	        System.out.printf("  Expires In: %s s%n", credential.getExpiresInSeconds());
-		} else {
+		if (null==credential) {
 			System.out.println("  No stored credentials were found.");
 	        requestAuthorization(codeFlow);
 	        String code = receiveAuthorizationCode();
 			credential = requestAccessToken(codeFlow, code);
+		} else {
+			System.out.println("  Using stored credentials.");
 		}
 		return credential;
-	}
-
-	private static void waitForTokenExpiration(long millis) throws InterruptedException {
-		final long buffer = 5 * 1000; // 5 sec
-		System.out.println("\n[STEP] Wait for Token Expiration");
-		System.out.printf("  Sleeping for %d seconds until token expires.%n", ((millis + buffer) / 1000));
-		Thread.sleep(millis + buffer);
 	}
 
 	private static void requestAuthorization(AuthorizationCodeFlow codeFlow) {
@@ -164,8 +148,6 @@ public class App {
         		.setScopes(SCOPE);
 		TokenResponse tokenResponse = tokeRequest.execute();
 		System.out.println("  Received new access token.");
-        System.out.printf("  Access Token: %s%n", tokenResponse.getAccessToken());
-        System.out.printf("  Expires In: %d s%n", tokenResponse.getExpiresInSeconds());
 		return codeFlow.createAndStoreCredential(tokenResponse, USER_ID);
 	}
 

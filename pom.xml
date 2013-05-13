@@ -24,5 +24,10 @@
     	<artifactId>google-http-client-jackson2</artifactId>
     	<version>1.14.1-beta</version>
     </dependency>
+    <dependency>
+    	<groupId>com.google.oauth-client</groupId>
+    	<artifactId>google-oauth-client-java7</artifactId>
+    	<version>1.14.1-beta</version>
+    </dependency>
   </dependencies>
 </project>
