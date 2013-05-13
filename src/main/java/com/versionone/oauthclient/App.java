@@ -66,26 +66,8 @@ public class App {
 		.setScopes(SCOPE)
 		.build();
 
-        System.out.println("\n[STEP] Check to see if credentials can be loaded.");
-		Credential credential = null;
 		try {
-			credential = codeFlow.loadCredential(USER_ID);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		if (null!=credential) {
-			System.out.println("Using stored credentials.");
-	        System.out.printf("Access Token: %s%n" + credential.getAccessToken());
-	        System.out.printf("Expires In: %s%n" + credential.getExpiresInSeconds());
-		} else {
-			System.out.println("No stored credentials were found.");
-		}
-
-		try {
-	        requestAuthorization(codeFlow);
-	        String code = receiveAuthorizationCode();
-			final Credential v1credential = requestAccessToken(codeFlow, code);
+			final Credential v1credential = obtainCredentials(codeFlow);
 			long expirationTime = v1credential.getExpiresInSeconds() * 1000;
 	        HttpRequestFactory requestFactory =
 	                HTTP_TRANSPORT.createRequestFactory(new HttpRequestInitializer() {
@@ -103,6 +85,23 @@ public class App {
 			// TODO Auto-generated catch block
 			ie.printStackTrace();
 		}
+	}
+
+	private static Credential obtainCredentials(AuthorizationCodeFlow codeFlow) throws IOException {
+		System.out.println("\n[STEP] Obtain Credentials.");
+		Credential credential = null;
+		credential = codeFlow.loadCredential(USER_ID);
+		if (null!=credential) {
+			System.out.println("Using stored credentials.");
+	        System.out.printf("Access Token: %s%n" + credential.getAccessToken());
+	        System.out.printf("Expires In: %s%n" + credential.getExpiresInSeconds());
+		} else {
+			System.out.println("No stored credentials were found.");
+	        requestAuthorization(codeFlow);
+	        String code = receiveAuthorizationCode();
+			credential = requestAccessToken(codeFlow, code);
+		}
+		return credential;
 	}
 
 	private static void waitForTokenExpiration(long millis) throws InterruptedException {
