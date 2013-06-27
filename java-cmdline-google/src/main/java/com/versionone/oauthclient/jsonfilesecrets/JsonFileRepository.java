@@ -21,7 +21,8 @@ public class JsonFileRepository implements IClientSecretRepository{
 		try {
 			clientSecrets = new FileInputStream(CLIENT_SECRETS_FILENAME);
 		} catch (FileNotFoundException e) {
-			System.out.printf("Please download the %s file from the VersionOne permitted applications page and save it in the current directory.%n", CLIENT_SECRETS_FILENAME);
+			System.out.printf("This application could not load %s file from the current directory.%n", CLIENT_SECRETS_FILENAME);
+			System.out.printf("Please add a Permitted App in your Member Profile, %ndownload the %s file from the VersionOne permitted applications page, %nand save it in the current directory.%n", CLIENT_SECRETS_FILENAME);
 			return null;
 		}
 		InstalledApplication app = null;

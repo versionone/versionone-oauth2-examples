@@ -165,8 +165,11 @@ public class App {
         GenericUrl v1url = new GenericUrl(secrets.getServerBaseUri());
         // Add the OAuth API end-point
         v1url.getPathParts().add("rest-1.oauth.v1");
-        // Add a simple data query that should work for most instances
-        v1url.appendRawPath("/data/Scope/0");
+        // Add a simple data query for the currently logged in member
+        v1url.getPathParts().add("Data");
+        v1url.getPathParts().add("Member");
+        v1url.set("where", "IsSelf=\'true\'");
+        
         HttpRequest v1request = requestFactory.buildGetRequest(v1url);
         System.out.printf("    %s %s\n", v1request.getRequestMethod(), v1request.getUrl().toString());
         System.out.printf("    Headers: %s\n", v1request.getHeaders().toString());
