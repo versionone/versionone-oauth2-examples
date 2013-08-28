@@ -26,7 +26,7 @@ except gflags.FlagsError, e:
 
 
 secrets_file = 'client_secrets.json'
-scopes_requested = 'query-api-1.0 test:grant_15s'
+scopes_requested = 'query-api-1.0'
 default_server_url = "http://localhost/VersionOne.Web"
 api_endpoint_path = "/query.v1"
 
