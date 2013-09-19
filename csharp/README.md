@@ -1,0 +1,1 @@
+This example demonstrates how to use C# and the OAuth2Client to query VersionOne. It includes `stored_credentials.json` and `client_secrets.json` files that have already been configured to work against the V1 SDK Testing web server at http://www14.v1host.com/v1sdktesting. You can also login and see or modify the project data yourself with admin/admin at that site.
