@@ -1,119 +1,114 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Net;
 using System.Text;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using OAuth2Client;
 
 namespace YamlClient
 {
+    public class Program
+    {
+        private static void Main()
+        {
+            IStorage credentials = new Storage.JsonFileStorage(
+                "../../client_secrets.json", "../../stored_credentials.json");
+            const string scopes = "query-api-1.0 apiv1";
+            const string url = "https://www14.v1host.com/v1sdktesting/query.v1";
 
-	class JsonClient
-	{
-		private readonly Uri _url;
-		private readonly string _ticket;
-		private WebClient _client;
+            var client = new JsonClient(credentials, url, scopes);
 
-		public JsonClient(string url, string ticket)
-		{
-			_url = new Uri(url);
-			_ticket = ticket;
-			_client = new WebClient { Encoding = Encoding.UTF8 };
-			_client.Headers["Cookie"] = ".V1.Ticket.VersionOne.Web=" + ticket;
-		}
-
-		public List<List<dynamic>> GetResultSets(string querybody)
-		{
-			var resultbody = _client.UploadString(_url, "SEARCH", querybody);
-			return JsonConvert.DeserializeObject<List<List<dynamic>>>(resultbody);
-		}
-	}
-
-	class Program
-	{
-		static void Main(string[] args)
-		{
-			var url = "http://localhost/VersionOne.Web/query.v1";
-			var authTicket = "HFZlcnNpb25PbmUuV2ViLkF1dGhlbnRpY2F0b3IUAAAABWFkbWluEuEI8K/jzwj/Pzf0dSjKKxDMXxs1Vl60APaj8st8bMWB";
-
-			var client = new JsonClient(url, authTicket);
-
-			var results = client.GetResultSets(QueryBody).ToArray();
-
-			var timeboxFound = results[0].First();
-			var workitemsFound = results[1];
-
-			var iterationStart = (DateTime) timeboxFound.BeginDate;
-			var iterationEnd = (DateTime) timeboxFound.EndDate;
-
-			var iterationDaySums =
-				from workitem in workitemsFound
-				let itemChanged = (DateTime) workitem.ChangeDate
-				where
-					itemChanged > iterationStart + TimeSpan.FromDays(1) &&
-					itemChanged <= iterationEnd + TimeSpan.FromDays(1)
-				group workitem by itemChanged.Date
-				into oneDaysItems
-				let anItem = oneDaysItems.First()
-				let itemIterations = (IEnumerable<dynamic>) anItem.Timebox
-				let itemIteration = itemIterations.First()
-				let tasksum = (int?)itemIteration["Workitems:Task.ToDo.@Sum"]
-				let testsum = (int?)itemIteration["Workitems:Test.ToDo.@Sum"]
-				select new
-					{
-						Day = oneDaysItems.Key,
-						Sum = tasksum ?? 0 + testsum ?? 0
-					};
-
-			foreach (var day in iterationDaySums)
-				Console.WriteLine("{0}\t{1}", day.Day, day.Sum);
-
-			Console.ReadLine();
-		}
-
-		public const string QueryBody = @"
-
-from: Timebox
-where:
-  Name: Sprint 4
-  Schedule.Name: Call Center Schedule
+            const string queryBody = @"
+from: Scope
 select:
-  - Name
-  - EndDate
-  - BeginDate
-
----
-
-from: Workitem
-
-asof: All
-
-where:
-  AssetType: $typesToSum
-  Timebox.Name: $iterationName
-
-select:
-  - ChangeDate
-  - Name
-  - AssetType
-  - ToDo
-  - from: Timebox
-    select:
-      - Name
-      - Workitems:Test.ToDo.@Sum
-      - Workitems:Task.ToDo.@Sum
-sort:
-  - ChangeDate
-
-with:
-  $typesToSum: Task,Test
-  $scheduleName: Call Center Schedule
-  $projectName: Call Center
-  $iterationName: Sprint 4
-
+    - Name
+    - Workitems.@Count
+    - Workitems:PrimaryWorkitem.@Count
+    - Workitems:PrimaryWorkitem[Estimate>'0'].@Count
+    - Workitems:PrimaryWorkitem[Estimate='0'].@Count
+    - Workitems:PrimaryWorkitem[Estimate>'0'].Estimate.@Sum
+    - from: Workitems:PrimaryWorkitem[Estimate>'0']
+      select:
+        - Name
+        - Estimate
 ";
 
+            var resultSets = client.GetResultSets(queryBody).ToArray();
+
+            foreach (var result in resultSets[0]) // Rember that query.v1 returns a resultSet of resultSets!
+            {
+                Console.WriteLine(result["Name"]);
+                Console.WriteLine("Total # of workitems: " + result["Workitems.@Count"]);
+                Console.WriteLine("Total # of Primary workitems: " + result["Workitems:PrimaryWorkitem.@Count"]);
+                Console.WriteLine("Total # of Estimated Primary workitems: " +
+                                  result["Workitems:PrimaryWorkitem[Estimate>'0'].@Count"]);
+                Console.WriteLine("Total # of Unestimated Primary workitems: " +
+                                  result["Workitems:PrimaryWorkitem[Estimate='0'].@Count"]);
+                Console.WriteLine("Sum of all Estimated Primary workitems: " +
+                                  result["Workitems:PrimaryWorkitem[Estimate>'0'].Estimate.@Sum"]);
+                foreach (var estimatedWorkitem in result["Workitems:PrimaryWorkitem[Estimate>'0']"])
+                {
+                    Console.WriteLine(estimatedWorkitem["Name"] + " : " + estimatedWorkitem["Estimate"]);
+                }
+                Console.WriteLine("\n");
+            }
+
+            Console.Write("Press any key to exit...");
+            Console.ReadLine();
+        }
+    }
+
+    public class JsonClient
+	{
+	    private readonly string _scopes;
+		private readonly Uri _url;
+		private readonly WebClient _client;
+	    private readonly IStorage _storedCredentials;
+
+		public JsonClient(IStorage storedCredentials, string url, string scopes)
+		{
+		    _scopes = scopes;
+			_url = new Uri(url);
+		    _storedCredentials = storedCredentials;
+			_client = new WebClient { Encoding = Encoding.UTF8 };
+		}
+
+		public List<List<JObject>> GetResultSets(string queryBody)
+		{
+			var resultbody = _client.UploadStringOAuth2(_storedCredentials, 
+                _scopes, _url.ToString(), queryBody);
+			return JsonConvert.DeserializeObject<List<List<JObject>>>(resultbody);
+		}
 	}
+
+    public static class WebClientExtensions
+    {
+        public static string UploadStringOAuth2(this WebClient client, 
+            IStorage storage, string scopes, string path, string queryBody)
+        {
+            var creds = storage.GetCredentials();
+            client.AddBearer(creds);
+            try
+            {
+                return client.UploadString(path, queryBody);
+            }
+            catch (WebException ex)
+            {
+                if (ex.Status == WebExceptionStatus.ProtocolError)
+                {
+                    if (((HttpWebResponse)ex.Response).StatusCode != HttpStatusCode.Unauthorized)
+                        throw;
+                    var secrets = storage.GetSecrets();
+                    var authclient = new AuthClient(secrets, scopes, null, null);
+                    var newcreds = authclient.refreshAuthCode(creds);
+                    var storedcreds = storage.StoreCredentials(newcreds);
+                    client.AddBearer(storedcreds);
+                    return client.UploadString(path, queryBody);
+                }
+                throw;
+            }
+        }
+    }
 }
