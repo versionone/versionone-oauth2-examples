@@ -1,8 +1,6 @@
 package com.versionone.oauthclient.jsonfilesecrets;
 
-import java.util.Arrays;
 import java.util.List;
-
 import com.google.api.client.util.Key;
 import com.versionone.oauthclient.IClientSecrets;
 
